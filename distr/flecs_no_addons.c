@@ -1387,6 +1387,8 @@ struct ecs_query_impl_t {
     char *tokens;                 /* Buffer with string tokens used by terms */
     int32_t *monitor;             /* Change monitor for fields with fixed src */
     ecs_termset_t dont_fragment_fields; /* Fields with only DontFragment terms */
+    ecs_termset_t external_fields; /* Fields matched by external sources */
+    ecs_flags64_t external_unalive_vars; /* Vars that may hold not alive entities */
 
 #ifdef FLECS_DEBUG
     ecs_termset_t final_terms;    /* Terms that don't use component inheritance */
@@ -1518,6 +1520,15 @@ int flecs_query_trivial_has_range(
 /* Internal function for initializing an iterator after vars are constrained */
 void flecs_query_iter_constrain(
     ecs_iter_t *it);
+
+/* Get the external source for an id, or for the relationship of a pair. */
+const ecs_external_source_desc_t* flecs_external_source_get(
+    const ecs_world_t *world,
+    ecs_id_t id);
+
+/* Free external sources on world fini. */
+void flecs_external_sources_fini(
+    ecs_world_t *world);
 
 #endif
 
@@ -2666,6 +2677,9 @@ struct ecs_world_t {
 
     /* Index of prefab children in ordered children vector. Used by ecs_get_target. */
     ecs_map_t prefab_child_indices;
+
+    /* Sources for ids whose matches come from outside the world. */
+    ecs_map_t external_sources;      /* map<id, ecs_external_source_desc_t*> */
 
     /* Internal callback for command inspection. Only one callback can be set at
      * a time. After assignment, the action will become active at the start of
@@ -14964,6 +14978,14 @@ ecs_observer_t* flecs_observer_init(
             return NULL;
         }
 
+        if (flecs_query_impl(query)->external_fields) {
+            /* External sources don't emit events */
+            ecs_err("observers cannot have terms for ids with an external "
+                "source");
+            flecs_observer_fini(o);
+            return NULL;
+        }
+
         terms = query->terms;
         term_count = query->term_count;
         query_flags = query->flags;
@@ -19757,6 +19779,7 @@ ecs_world_t *ecs_mini(void) {
     }
 
     ecs_map_init(&world->prefab_child_indices, a);
+    ecs_map_init(&world->external_sources, a);
 
     ecs_set_stage_count(world, 1);
     ecs_default_lookup_path[0] = EcsFlecsCore;
@@ -19924,6 +19947,8 @@ int ecs_fini(
     if (world->binding_ctx_free) {
         world->binding_ctx_free(world->binding_ctx);
     }
+
+    flecs_external_sources_fini(world);
 
     /* After this point no more user code is invoked */
 
@@ -24463,6 +24488,129 @@ const ecs_query_t* ecs_query_get(
     }
 }
 
+static ecs_external_source_desc_t* flecs_external_source_get_mut(
+    const ecs_world_t *world,
+    ecs_entity_t id)
+{
+    if (!ecs_map_count(&world->external_sources)) {
+        return NULL;
+    }
+
+    return ecs_map_get_deref(
+        &world->external_sources, ecs_external_source_desc_t, id);
+}
+
+const ecs_external_source_desc_t* flecs_external_source_get(
+    const ecs_world_t *world,
+    ecs_id_t id)
+{
+    world = ecs_get_world(world); /* Can be called with a stage */
+    if (!ecs_map_count(&world->external_sources)) {
+        return NULL;
+    }
+
+    ecs_entity_t first;
+    if (ECS_IS_PAIR(id)) {
+        first = ECS_PAIR_FIRST(id);
+    } else if (id & ECS_ID_FLAGS_MASK) {
+        return NULL;
+    } else {
+        first = id;
+    }
+
+    if (!first || first == EcsWildcard || first == EcsAny ||
+        first == EcsThis || first == EcsVariable)
+    {
+        return NULL;
+    }
+
+    return flecs_external_source_get_mut(world, (uint32_t)first);
+}
+
+static void flecs_external_source_free(
+    ecs_world_t *world,
+    ecs_external_source_desc_t *src)
+{
+    if (src->ctx_free) {
+        src->ctx_free(src->ctx);
+    }
+
+    flecs_free_t(&world->allocator, ecs_external_source_desc_t, src);
+}
+
+int ecs_set_external_source(
+    ecs_world_t *world,
+    ecs_entity_t id,
+    const ecs_external_source_desc_t *desc)
+{
+    flecs_poly_assert(world, ecs_world_t);
+    ecs_check(id != 0, ECS_INVALID_PARAMETER, NULL);
+    ecs_check(!ECS_IS_PAIR(id) && !(id & ECS_ID_FLAGS_MASK),
+        ECS_INVALID_PARAMETER,
+        "external source must be set on a component or relationship, "
+        "not on a pair");
+    ecs_check(ecs_is_alive(world, id), ECS_INVALID_PARAMETER, NULL);
+    ecs_check(!desc || desc->next != NULL, ECS_INVALID_PARAMETER,
+        "external source requires a next callback");
+
+    /* Matches for the id come from the source only. Tables that already
+     * have the id would silently stop matching, so refuse. */
+    if (desc && (ecs_id_in_use(world, id) ||
+        ecs_id_in_use(world, ecs_pair(id, EcsWildcard))))
+    {
+        char *str = ecs_id_str(world, id);
+        ecs_err("cannot set external source for '%s': id is in use by tables",
+            str);
+        ecs_os_free(str);
+        return -1;
+    }
+
+    uint32_t key = (uint32_t)id;
+    ecs_external_source_desc_t *cur = flecs_external_source_get_mut(world, key);
+    if (cur) {
+        ecs_map_remove(&world->external_sources, key);
+        flecs_external_source_free(world, cur);
+    }
+
+    if (desc) {
+        ecs_external_source_desc_t *src = flecs_alloc_t(
+            &world->allocator, ecs_external_source_desc_t);
+        *src = *desc;
+        ecs_map_insert_ptr(&world->external_sources, key, src);
+    }
+
+    return 0;
+error:
+    return -1;
+}
+
+const ecs_external_source_desc_t* ecs_get_external_source(
+    const ecs_world_t *world,
+    ecs_entity_t id)
+{
+    ecs_check(world != NULL, ECS_INVALID_PARAMETER, NULL);
+    world = ecs_get_world(world);
+    if (!id || ECS_IS_PAIR(id) || (id & ECS_ID_FLAGS_MASK)) {
+        return NULL;
+    }
+
+    return flecs_external_source_get_mut(world, (uint32_t)id);
+error:
+    return NULL;
+}
+
+void flecs_external_sources_fini(
+    ecs_world_t *world)
+{
+    ecs_map_iter_t it = ecs_map_iter(&world->external_sources);
+    while (ecs_map_next(&it)) {
+        ecs_external_source_desc_t *src = ecs_map_ptr(&it);
+        flecs_external_source_free(world, src);
+    }
+
+    ecs_map_fini(&world->external_sources);
+}
+
 static void flecs_query_str_add_id(
     const ecs_world_t *world,
     ecs_strbuf_t *buf,
@@ -25524,6 +25672,19 @@ static void flecs_query_set_self_trivial(
     ECS_BIT_COND(q->flags, EcsQuerySelfTrivial, self_trivial);
 }
 
+/* Terms for ids with an external source are evaluated by asking the source.
+ * The source only knows which entities have the id, so features that need
+ * tables or the entity graph can't be used. */
+static int flecs_query_validate_external_term(
+    ecs_query_validator_ctx_t *ctx,
+    const ecs_term_t *term)
+{
+    (void)term;
+    flecs_query_validator_error(ctx,
+        "terms for ids with an external source require FLECS_QUERY_PLANS");
+    return -1;
+}
+
 static int flecs_query_finalize_terms(
     ecs_world_t *world,
     ecs_query_t *q,
@@ -25758,6 +25919,20 @@ static int flecs_query_finalize_terms(
             }
         }
 
+        if (flecs_external_source_get(world, term->id)) {
+            if (flecs_query_validate_external_term(&ctx, term)) {
+                return -1;
+            }
+
+            term->flags_ |= EcsTermIsExternal;
+            ECS_BIT_CLEAR16(term->flags_, EcsTermIsTrivial);
+            ECS_BIT_CLEAR16(term->flags_, EcsTermIsCacheable);
+            if (term->field_index >= 0) {
+                ECS_TERMSET_SET(flecs_query_impl(q)->external_fields,
+                    1u << term->field_index);
+            }
+        }
+
         if (is_sparse) {
             term->flags_ |= EcsTermIsSparse;
             ECS_BIT_CLEAR16(term->flags_, EcsTermIsTrivial);
@@ -25985,6 +26160,10 @@ bool flecs_query_finalize_simple(
 
         ecs_id_t id = term->id;
         if (ecs_id_is_wildcard(id)) {
+            return false;
+        }
+
+        if (flecs_external_source_get(world, id)) {
             return false;
         }
 

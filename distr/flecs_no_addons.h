@@ -653,6 +653,7 @@ extern "C" {
 #define EcsTermIsOr                   (1u << 11)
 #define EcsTermDontFragment           (1u << 12)
 #define EcsTermNonFragmentingChildOf  (1u << 13)
+#define EcsTermIsExternal             (1u << 14)
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Observer flags (used by ecs_observer_t::flags)
@@ -5878,6 +5879,75 @@ typedef struct ecs_query_desc_t {
     ecs_entity_t entity;
 } ecs_query_desc_t;
 
+/** State passed to an external source when a query asks it for matches.
+ * The query fills in the input members and zeroes `state` before the first
+ * call to ecs_external_source_desc_t::next for a (src, id) pair. Each call
+ * that returns true sets the output members for one match. Callbacks run
+ * while the query is iterated, on the thread that iterates it, and must not
+ * modify the world. When a query is iterated from several threads at once,
+ * callbacks are called concurrently, each with its own iterator.
+ *
+ * @ingroup queries
+ */
+typedef struct ecs_external_iter_t {
+    /** World the query is evaluated on. */
+    const ecs_world_t *world;
+
+    /** Input: entity to match against, or 0 to enumerate every entity that
+     * has `id`. */
+    ecs_entity_t src;
+
+    /** Input: id to match. For a relationship this can be (R, *), in which
+     * case each target is a separate match. */
+    ecs_id_t id;
+
+    /** Output: entity that matched. Equal to `src` when `src` is not 0. */
+    ecs_entity_t match_src;
+
+    /** Output: id that matched. Must not be a wildcard. */
+    ecs_id_t match_id;
+
+    /** Output: component value for the match, or NULL for tags. Must remain
+     * valid until the next call to next() or fini() for this iterator. */
+    const void *ptr;
+
+    /** Source context (ecs_external_source_desc_t::ctx). */
+    void *ctx;
+
+    /** Free for the source to use. Zeroed before the first call. */
+    uint64_t state[4];
+} ecs_external_iter_t;
+
+/** Return the next match for an external source, or false when done. */
+typedef bool (*ecs_external_next_action_t)(
+    ecs_external_iter_t *it);
+
+/** Release resources held in ecs_external_iter_t::state. Called once for
+ * every search the query starts (each time it sets src and id and zeroes
+ * state), after its last call to next(): when next() returned false, when the
+ * query moves on to another entity, or when the iterator is finished early. */
+typedef void (*ecs_external_fini_action_t)(
+    ecs_external_iter_t *it);
+
+/** Used with ecs_set_external_source().
+ *
+ * @ingroup queries
+ */
+typedef struct ecs_external_source_desc_t {
+    /** Find matches (required). */
+    ecs_external_next_action_t next;
+
+    /** Release iteration state (optional). */
+    ecs_external_fini_action_t fini;
+
+    /** Context passed to callbacks. */
+    void *ctx;
+
+    /** Callback to free ctx when the source is replaced or the world is
+     * deleted. */
+    ecs_ctx_free_t ctx_free;
+} ecs_external_source_desc_t;
+
 /** Used with ecs_observer_init().
  *
  * @ingroup observers
@@ -9188,6 +9258,61 @@ ecs_query_count_t ecs_query_count(
 FLECS_API
 bool ecs_query_is_true(
     const ecs_query_t *query);
+
+/** Provide the matches for a component or relationship from outside the world.
+ * Query terms for `id`, or for pairs with `id` as relationship, do not look
+ * at tables. They call the source instead, which reports which entities have
+ * the id and, for components, a pointer to the value. This lets a query join
+ * data that is stored elsewhere (a database, a file, a remote service) with
+ * data in the world, without loading it into the world first.
+ *
+ * A source must be set before queries that use the id are created, and the
+ * id must not be in use by tables. Queries only ask the source, so the id
+ * should not be added to entities while the source is set. Queries created
+ * afterwards treat each term for the id as follows:
+ *
+ * - Supported: And, Not and Optional terms with a $this, variable or fixed
+ *   source; a fixed target, a variable target or a wildcard target for
+ *   relationships.
+ * - Not supported (the query fails to create): up traversal and inheritance,
+ *   Or chains, the Any (_) wildcard as target, *From operators, and use in
+ *   observers. Terms with a wildcard or variable relationship, like (*, T),
+ *   don't match ids from external sources.
+ * - Terms for the id are never cached and never report changes.
+ * - Field data is read with ecs_field(), which returns NULL when the field is
+ *   not set. Results matched by an external term with a $this source have
+ *   one entity, so the field points at that entity's value.
+ *
+ * A source may report entities that are not alive in the world. Such an
+ * entity is only returned when every term that uses its variable is an
+ * external term; otherwise it is skipped, since no other term can match it.
+ * A relationship target reported by a source for a variable target must be
+ * alive.
+ *
+ * Pass NULL for desc to remove a source. Queries created while it was set
+ * then match nothing for the id.
+ *
+ * @param world The world.
+ * @param id The component, tag or relationship.
+ * @param desc The source, or NULL to remove it.
+ * @return Zero if success, non-zero if failed.
+ */
+FLECS_API
+int ecs_set_external_source(
+    ecs_world_t *world,
+    ecs_entity_t id,
+    const ecs_external_source_desc_t *desc);
+
+/** Get the external source for a component or relationship.
+ *
+ * @param world The world.
+ * @param id The component, tag or relationship.
+ * @return The source, or NULL if the id has none.
+ */
+FLECS_API
+const ecs_external_source_desc_t* ecs_get_external_source(
+    const ecs_world_t *world,
+    ecs_entity_t id);
 
 /** @} */
 
