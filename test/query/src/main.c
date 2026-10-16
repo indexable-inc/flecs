@@ -2340,6 +2340,38 @@ void Sparse_sparse_pair_first_after_query(void);
 void Sparse_sparse_pair_second_after_query(void);
 void Sparse_sparse_after_or(void);
 
+// Testsuite 'External'
+void External_setup(void);
+void External_select_this(void);
+void External_select_empty(void);
+void External_select_skips_prefab(void);
+void External_external_then_table_term(void);
+void External_table_then_external_term(void);
+void External_not(void);
+void External_optional(void);
+void External_optional_pair_var_tgt(void);
+void External_fixed_src(void);
+void External_fixed_src_no_match(void);
+void External_var_src(void);
+void External_pair_fixed_tgt(void);
+void External_pair_wildcard_tgt(void);
+void External_pair_var_tgt_feeds_term(void);
+void External_pair_var_tgt_not_alive(void);
+void External_not_alive_this(void);
+void External_not_alive_skipped_for_table_term(void);
+void External_not_alive_joined_with_external(void);
+void External_fini_on_early_stop(void);
+void External_page_iter(void);
+void External_is_true(void);
+void External_remove_source(void);
+void External_get_source_and_ctx_free(void);
+void External_set_in_use(void);
+void External_invalid_up(void);
+void External_invalid_or(void);
+void External_invalid_any_tgt(void);
+void External_invalid_observer(void);
+void External_plan(void);
+
 // Testsuite 'DontFragment'
 void DontFragment_setup(void);
 void DontFragment_1_fixed_sparse(void);
@@ -12184,6 +12216,125 @@ bake_test_case Sparse_testcases[] = {
     }
 };
 
+bake_test_case External_testcases[] = {
+    {
+        "select_this",
+        External_select_this
+    },
+    {
+        "select_empty",
+        External_select_empty
+    },
+    {
+        "select_skips_prefab",
+        External_select_skips_prefab
+    },
+    {
+        "external_then_table_term",
+        External_external_then_table_term
+    },
+    {
+        "table_then_external_term",
+        External_table_then_external_term
+    },
+    {
+        "not",
+        External_not
+    },
+    {
+        "optional",
+        External_optional
+    },
+    {
+        "optional_pair_var_tgt",
+        External_optional_pair_var_tgt
+    },
+    {
+        "fixed_src",
+        External_fixed_src
+    },
+    {
+        "fixed_src_no_match",
+        External_fixed_src_no_match
+    },
+    {
+        "var_src",
+        External_var_src
+    },
+    {
+        "pair_fixed_tgt",
+        External_pair_fixed_tgt
+    },
+    {
+        "pair_wildcard_tgt",
+        External_pair_wildcard_tgt
+    },
+    {
+        "pair_var_tgt_feeds_term",
+        External_pair_var_tgt_feeds_term
+    },
+    {
+        "pair_var_tgt_not_alive",
+        External_pair_var_tgt_not_alive
+    },
+    {
+        "not_alive_this",
+        External_not_alive_this
+    },
+    {
+        "not_alive_skipped_for_table_term",
+        External_not_alive_skipped_for_table_term
+    },
+    {
+        "not_alive_joined_with_external",
+        External_not_alive_joined_with_external
+    },
+    {
+        "fini_on_early_stop",
+        External_fini_on_early_stop
+    },
+    {
+        "page_iter",
+        External_page_iter
+    },
+    {
+        "is_true",
+        External_is_true
+    },
+    {
+        "remove_source",
+        External_remove_source
+    },
+    {
+        "get_source_and_ctx_free",
+        External_get_source_and_ctx_free
+    },
+    {
+        "set_in_use",
+        External_set_in_use
+    },
+    {
+        "invalid_up",
+        External_invalid_up
+    },
+    {
+        "invalid_or",
+        External_invalid_or
+    },
+    {
+        "invalid_any_tgt",
+        External_invalid_any_tgt
+    },
+    {
+        "invalid_observer",
+        External_invalid_observer
+    },
+    {
+        "plan",
+        External_plan
+    }
+};
+
 bake_test_case DontFragment_testcases[] = {
     {
         "1_fixed_sparse",
@@ -14866,6 +15017,11 @@ bake_test_param Sparse_params[] = {
     {"cache_kind", (char**)Sparse_cache_kind_param, 2}
 };
 
+const char* External_cache_kind_param[] = {"default", "auto"};
+bake_test_param External_params[] = {
+    {"cache_kind", (char**)External_cache_kind_param, 2}
+};
+
 const char* DontFragment_cache_kind_param[] = {"default", "auto"};
 bake_test_param DontFragment_params[] = {
     {"cache_kind", (char**)DontFragment_cache_kind_param, 2}
@@ -15042,6 +15198,15 @@ static bake_test_suite suites[] = {
         Sparse_params
     },
     {
+        "External",
+        External_setup,
+        NULL,
+        29,
+        External_testcases,
+        1,
+        External_params
+    },
+    {
         "DontFragment",
         DontFragment_setup,
         NULL,
@@ -15090,5 +15255,5 @@ static bake_test_suite suites[] = {
 };
 
 int main(int argc, char *argv[]) {
-    return bake_test_run("query", argc, argv, suites, 26);
+    return bake_test_run("query", argc, argv, suites, 27);
 }
