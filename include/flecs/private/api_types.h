@@ -153,6 +153,7 @@ typedef struct ecs_query_iter_t {
     struct ecs_query_op_ctx_t *op_ctx;        /* Operation-specific state. */
     uint64_t *written;
     ecs_query_op_profile_t *profile;
+    const void **external_ptrs;               /* Field data returned by external sources. */
     int16_t op;                               /* Currently iterated query plan operation (index into ops). */
 #else
     ecs_entity_t entity;                      /* Constrained $this entity. */

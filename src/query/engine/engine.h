@@ -232,6 +232,30 @@ bool flecs_query_trivial_sparse_search(
     const ecs_query_run_ctx_t *ctx,
     bool redo);
 
+/* External source evaluation */
+bool flecs_query_external(
+    const ecs_query_op_t *op,
+    bool redo,
+    const ecs_query_run_ctx_t *ctx);
+
+bool flecs_query_external_with(
+    const ecs_query_op_t *op,
+    bool redo,
+    const ecs_query_run_ctx_t *ctx);
+
+bool flecs_query_external_not(
+    const ecs_query_op_t *op,
+    bool redo,
+    const ecs_query_run_ctx_t *ctx);
+
+bool flecs_query_external_optional(
+    const ecs_query_op_t *op,
+    bool redo,
+    const ecs_query_run_ctx_t *ctx);
+
+void flecs_query_external_fini(
+    ecs_query_external_ctx_t *op_ctx);
+
 
 /* Hierarchy evaluation */
 

@@ -1280,6 +1280,14 @@ ecs_observer_t* flecs_observer_init(
             return NULL;
         }
 
+        if (flecs_query_impl(query)->external_fields) {
+            /* External sources don't emit events */
+            ecs_err("observers cannot have terms for ids with an external "
+                "source");
+            flecs_observer_fini(o);
+            return NULL;
+        }
+
         terms = query->terms;
         term_count = query->term_count;
         query_flags = query->flags;

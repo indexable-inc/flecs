@@ -1050,6 +1050,23 @@ static void flecs_query_set_op_kind(
             ECS_INTERNAL_ERROR, NULL);
         op->kind = EcsQueryTrav;
     
+    /* Ids with an external source are matched by asking the source */
+    } else if (term->flags_ & EcsTermIsExternal) {
+        if (op->kind == EcsQueryAnd) {
+            /* Not and Optional evaluate each entity of a table separately,
+             * so they can't be expressed as a control flow block around an
+             * instruction that matches an entire table. */
+            if (term->oper == EcsNot) {
+                op->kind = EcsQueryExternalNot;
+            } else if (term->oper == EcsOptional) {
+                op->kind = EcsQueryExternalOptional;
+            } else {
+                op->kind = EcsQueryExternal;
+            }
+        } else {
+            op->kind = EcsQueryExternalWith;
+        }
+
     /* Handle non-fragmenting components */
     } else if (term->flags_ & EcsTermDontFragment) {
         if (op->kind == EcsQueryAnd) {
@@ -1269,9 +1286,13 @@ int flecs_query_compile_term(
 
     bool is_not = (term->oper == EcsNot) && !builtin_pred;
     if (op.kind == EcsQuerySparseNot || op.kind == EcsQueryTreeUpNot ||
-        op.kind == EcsQueryTreeSelfUpNot)
+        op.kind == EcsQueryTreeSelfUpNot || op.kind == EcsQueryExternalNot)
     {
         is_not = false;
+    }
+
+    if (op.kind == EcsQueryExternalOptional) {
+        is_optional = false;
     }
 
     /* Save write state at start of term so we can use it to reliably track

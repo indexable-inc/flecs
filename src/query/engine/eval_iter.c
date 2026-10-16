@@ -309,6 +309,12 @@ void flecs_query_op_ctx_fini(
 
         break;
     }
+    case EcsQueryExternal:
+    case EcsQueryExternalWith:
+    case EcsQueryExternalNot:
+    case EcsQueryExternalOptional:
+        flecs_query_external_fini(&ctx->is.external);
+        break;
     default:
         break;
     }
@@ -447,6 +453,12 @@ static void flecs_query_iter_alloc(
                 ECS_SIZEOF(ecs_query_op_ctx_t) * zero_count);
         }
         qit->op_ctx = op_ctx;
+    }
+
+    qit->external_ptrs = NULL;
+    if (impl->external_fields) {
+        qit->external_ptrs = flecs_iter_calloc_n(
+            it, const void*, impl->pub.field_count);
     }
 }
 

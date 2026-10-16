@@ -1703,6 +1703,10 @@ static bool flecs_query_dispatch(
     case EcsQuerySparseNot: return flecs_query_sparse_with(op, redo, ctx, true);
     case EcsQuerySparseSelfUp: return flecs_query_sparse_self_up(op, redo, ctx);
     case EcsQuerySparseUp: return flecs_query_sparse_up(op, redo, ctx);
+    case EcsQueryExternal: return flecs_query_external(op, redo, ctx);
+    case EcsQueryExternalWith: return flecs_query_external_with(op, redo, ctx);
+    case EcsQueryExternalNot: return flecs_query_external_not(op, redo, ctx);
+    case EcsQueryExternalOptional: return flecs_query_external_optional(op, redo, ctx);
     case EcsQueryTree: return flecs_query_tree_and(op, redo, ctx);
     case EcsQueryTreeWildcard: return flecs_query_tree_and_wildcard(op, redo, ctx, false);
     case EcsQueryTreePre: return flecs_query_tree_pre(op, redo, ctx);

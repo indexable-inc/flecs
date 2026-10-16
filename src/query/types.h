@@ -88,6 +88,10 @@ typedef enum {
     EcsQuerySparseSelfUp,
     EcsQuerySparseUp,
     EcsQuerySparseWith,     /* Evaluate sparse component against fixed or variable source */
+    EcsQueryExternal,       /* Ask external source for matches (variable source) */
+    EcsQueryExternalWith,   /* Ask external source for matches (fixed source) */
+    EcsQueryExternalNot,    /* Ask external source for entities without the id */
+    EcsQueryExternalOptional, /* Ask external source, also return entities without the id */
     EcsQueryTree,
     EcsQueryTreeWildcard,
     EcsQueryTreeWith,       /* Evaluate (ChildOf, tgt) against fixed or variable source */
@@ -410,6 +414,18 @@ typedef struct {
     ecs_table_range_t range;
 } ecs_query_optional_ctx_t;
 
+/* External source context */
+typedef struct {
+    const ecs_external_source_desc_t *source;
+    ecs_external_iter_t it;   /* Iterator passed to source */
+    ecs_table_range_t range;  /* Entities to evaluate when source is written */
+    int32_t cur;              /* Current row in range */
+    bool active;              /* Source iteration started, needs fini */
+    bool per_entity;          /* Searching matches for entity at cur */
+    bool matched;             /* Entity at cur had at least one match */
+    bool in_range;            /* Range has entities left to evaluate */
+} ecs_query_external_ctx_t;
+
 typedef struct ecs_query_op_ctx_t {
     union {
         ecs_query_all_ctx_t all;
@@ -432,6 +448,7 @@ typedef struct ecs_query_op_ctx_t {
         ecs_query_tree_up_ctx_t tree_up;
         ecs_query_tree_wildcard_ctx_t tree_wildcard;
         ecs_query_optional_ctx_t optional;
+        ecs_query_external_ctx_t external;
     } is;
 } ecs_query_op_ctx_t;
 
@@ -509,6 +526,8 @@ struct ecs_query_impl_t {
     char *tokens;                 /* Buffer with string tokens used by terms */
     int32_t *monitor;             /* Change monitor for fields with fixed src */
     ecs_termset_t dont_fragment_fields; /* Fields with only DontFragment terms */
+    ecs_termset_t external_fields; /* Fields matched by external sources */
+    ecs_flags64_t external_unalive_vars; /* Vars that may hold not alive entities */
 
 #ifdef FLECS_DEBUG
     ecs_termset_t final_terms;    /* Terms that don't use component inheritance */

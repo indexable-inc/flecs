@@ -50,6 +50,15 @@ int flecs_query_trivial_has_range(
 void flecs_query_iter_constrain(
     ecs_iter_t *it);
 
+/* Get the external source for an id, or for the relationship of a pair. */
+const ecs_external_source_desc_t* flecs_external_source_get(
+    const ecs_world_t *world,
+    ecs_id_t id);
+
+/* Free external sources on world fini. */
+void flecs_external_sources_fini(
+    ecs_world_t *world);
+
 #ifdef FLECS_CACHED_QUERIES
 /* Reclaim memory from queries */
 void flecs_query_reclaim(

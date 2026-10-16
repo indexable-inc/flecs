@@ -57,6 +57,10 @@ const char* flecs_query_op_str(
     case EcsQuerySparseNot:      return "sparse_not  ";
     case EcsQuerySparseSelfUp:   return "sparse_sup  ";
     case EcsQuerySparseUp:       return "sparse_up   ";
+    case EcsQueryExternal:       return "external    ";
+    case EcsQueryExternalWith:   return "external_w  ";
+    case EcsQueryExternalNot:    return "external_not";
+    case EcsQueryExternalOptional: return "external_opt";
     case EcsQueryTree:           return "tree        ";
     case EcsQueryTreeWildcard:   return "tree_wc     ";
     case EcsQueryTreePre:        return "tree_pre    ";

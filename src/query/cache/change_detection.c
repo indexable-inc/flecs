@@ -474,7 +474,7 @@ void flecs_query_mark_fields_dirty(
     /* Evaluate all writable non-fixed, set fields */
     ecs_termset_t write_fields =
         (ecs_termset_t)(q->write_fields & ~q->fixed_fields & it->set_fields &
-            ~impl->dont_fragment_fields);
+            ~impl->dont_fragment_fields & ~impl->external_fields);
     if (!write_fields || (it->flags & EcsIterNoData)) {
         return;
     }

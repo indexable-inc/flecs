@@ -141,6 +141,9 @@ struct ecs_world_t {
     /* Index of prefab children in ordered children vector. Used by ecs_get_target. */
     ecs_map_t prefab_child_indices;
 
+    /* Sources for ids whose matches come from outside the world. */
+    ecs_map_t external_sources;      /* map<id, ecs_external_source_desc_t*> */
+
     /* Internal callback for command inspection. Only one callback can be set at
      * a time. After assignment, the action will become active at the start of
      * the next frame, set by ecs_frame_begin, and will be reset by

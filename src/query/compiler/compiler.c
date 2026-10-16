@@ -998,6 +998,10 @@ static bool flecs_query_op_has_ctx_fini(
     case EcsQueryTreeSelfUpNot:
     case EcsQuerySparseUp:
     case EcsQuerySparseSelfUp:
+    case EcsQueryExternal:
+    case EcsQueryExternalWith:
+    case EcsQueryExternalNot:
+    case EcsQueryExternalOptional:
         return true;
     default:
         return false;
@@ -1042,6 +1046,62 @@ static void flecs_query_compute_op_ctx_ranges(
         query->op_ctx_fini_first = flecs_ito(int16_t, fini_first);
         query->op_ctx_fini_count = flecs_ito(int16_t, fini_last - fini_first + 1);
     }
+}
+
+static bool flecs_query_op_is_external(
+    ecs_query_op_kind_t kind)
+{
+    return kind == EcsQueryExternal || kind == EcsQueryExternalWith ||
+        kind == EcsQueryExternalNot || kind == EcsQueryExternalOptional;
+}
+
+/* Find variables that may hold entities that are not alive. An external source
+ * can return such entities, but only terms for external ids can match them, as
+ * every other instruction expects the entity to be stored in a table. */
+static void flecs_query_compute_external_vars(
+    ecs_query_impl_t *query)
+{
+    ecs_flags64_t written = 0, used = 0;
+    int32_t i, count = query->op_count;
+
+    for (i = 0; i < count; i ++) {
+        const ecs_query_op_t *op = &query->ops[i];
+        bool external = flecs_query_op_is_external(op->kind);
+
+        if (op->flags & (EcsQueryIsVar << EcsQuerySrc)) {
+            if (external) {
+                written |= 1ull << op->src.var;
+            } else {
+                used |= 1ull << op->src.var;
+            }
+        }
+
+        if (op->flags & (EcsQueryIsVar << EcsQueryFirst)) {
+            used |= 1ull << op->first.var;
+        }
+
+        if (op->flags & (EcsQueryIsVar << EcsQuerySecond)) {
+            used |= 1ull << op->second.var;
+        }
+    }
+
+    /* The table and entity variable for the same name share an entity */
+    for (i = 0; i < query->var_count; i ++) {
+        const ecs_query_var_t *var = &query->vars[i];
+        if (!(used & (1ull << i)) || !var->name) {
+            continue;
+        }
+
+        int32_t j;
+        for (j = 0; j < query->var_count; j ++) {
+            const char *name = query->vars[j].name;
+            if (name && !ecs_os_strcmp(name, var->name)) {
+                used |= 1ull << j;
+            }
+        }
+    }
+
+    query->external_unalive_vars = written & ~used;
 }
 
 int flecs_query_compile(
@@ -1323,6 +1383,9 @@ int flecs_query_compile(
         ecs_os_memcpy_n(query->ops, query_ops, ecs_query_op_t, op_count);
         query->tree_cache_op = flecs_query_find_tree_cache_op(query);
         flecs_query_compute_op_ctx_ranges(query);
+        if (query->external_fields) {
+            flecs_query_compute_external_vars(query);
+        }
     }
 
     return 0;

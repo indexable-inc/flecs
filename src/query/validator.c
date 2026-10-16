@@ -962,6 +962,62 @@ static void flecs_query_set_self_trivial(
     ECS_BIT_COND(q->flags, EcsQuerySelfTrivial, self_trivial);
 }
 
+/* Terms for ids with an external source are evaluated by asking the source.
+ * The source only knows which entities have the id, so features that need
+ * tables or the entity graph can't be used. */
+static int flecs_query_validate_external_term(
+    ecs_query_validator_ctx_t *ctx,
+    const ecs_term_t *term)
+{
+#ifndef FLECS_QUERY_PLANS
+    (void)term;
+    flecs_query_validator_error(ctx,
+        "terms for ids with an external source require FLECS_QUERY_PLANS");
+    return -1;
+#else
+    if (term->src.id & EcsUp) {
+        flecs_query_validator_error(ctx,
+            "terms for ids with an external source cannot traverse "
+            "relationships");
+        return -1;
+    }
+
+    if (term->flags_ & EcsTermIsOr) {
+        flecs_query_validator_error(ctx,
+            "terms for ids with an external source cannot be part of an "
+            "OR expression");
+        return -1;
+    }
+
+    if (term->oper == EcsAndFrom || term->oper == EcsOrFrom ||
+        term->oper == EcsNotFrom)
+    {
+        flecs_query_validator_error(ctx,
+            "terms for ids with an external source cannot use *From "
+            "operators");
+        return -1;
+    }
+
+    if (term->flags_ & (EcsTermTransitive|EcsTermReflexive|EcsTermIdInherited|
+        EcsTermMatchAnySrc))
+    {
+        flecs_query_validator_error(ctx,
+            "terms for ids with an external source cannot be transitive, "
+            "reflexive, inherited or have an Any (_) source");
+        return -1;
+    }
+
+    if (ECS_IS_PAIR(term->id) && ECS_PAIR_SECOND(term->id) == EcsAny) {
+        flecs_query_validator_error(ctx,
+            "terms for ids with an external source cannot have an Any (_) "
+            "target");
+        return -1;
+    }
+
+    return 0;
+#endif
+}
+
 static int flecs_query_finalize_terms(
     ecs_world_t *world,
     ecs_query_t *q,
@@ -1231,6 +1287,20 @@ static int flecs_query_finalize_terms(
             }
         }
 
+        if (flecs_external_source_get(world, term->id)) {
+            if (flecs_query_validate_external_term(&ctx, term)) {
+                return -1;
+            }
+
+            term->flags_ |= EcsTermIsExternal;
+            ECS_BIT_CLEAR16(term->flags_, EcsTermIsTrivial);
+            ECS_BIT_CLEAR16(term->flags_, EcsTermIsCacheable);
+            if (term->field_index >= 0) {
+                ECS_TERMSET_SET(flecs_query_impl(q)->external_fields,
+                    1u << term->field_index);
+            }
+        }
+
         if (is_sparse) {
             term->flags_ |= EcsTermIsSparse;
             ECS_BIT_CLEAR16(term->flags_, EcsTermIsTrivial);
@@ -1489,6 +1559,10 @@ bool flecs_query_finalize_simple(
 
         ecs_id_t id = term->id;
         if (ecs_id_is_wildcard(id)) {
+            return false;
+        }
+
+        if (flecs_external_source_get(world, id)) {
             return false;
         }
 

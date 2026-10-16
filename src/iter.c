@@ -144,6 +144,29 @@ void* flecs_field_ptr(
         return it->ptrs[index];
     }
 
+#ifdef FLECS_QUERY_PLANS
+    if (it->query &&
+        (flecs_query_impl(it->query)->external_fields & (1u << index)))
+    {
+        /* Value returned by the external source for the current result. Page
+         * and worker iterators are chained to the query iterator. */
+        const ecs_iter_t *qit = it;
+        while (qit->chain_it) {
+            qit = qit->chain_it;
+        }
+
+        ecs_assert(qit->next == ecs_query_next, ECS_INVALID_OPERATION,
+            "field of an external term requires a query iterator");
+
+        if (!(it->set_fields & (1u << index))) {
+            return NULL;
+        }
+
+        return ECS_CONST_CAST(void*,
+            qit->priv_.iter.query.external_ptrs[index]);
+    }
+#endif
+
     int16_t column = it->columns[index];
     if (column >= 0) {
         ecs_column_t *col = &it->table->data.columns[column];

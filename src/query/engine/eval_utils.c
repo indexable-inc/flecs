@@ -28,6 +28,10 @@ void flecs_query_set_iter_this(
             it->entities += it->offset;
         }
     } else if (count == 1) {
+        /* Entity without table, for example one returned by an external
+         * source that isn't alive in the world. */
+        it->table = NULL;
+        it->offset = 0;
         it->count = 1;
         it->entities = &ctx->vars[0].entity;
     }
