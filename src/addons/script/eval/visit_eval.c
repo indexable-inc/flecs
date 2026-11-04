@@ -226,7 +226,15 @@ int flecs_script_symbol_lookup(
         return -1;
     }
 
-    if (v && v->type_visitor && !from &&
+    /* A world alias is looked up before anything else by
+     * ecs_lookup_path_w_sep, so it wins from inside any scope. Keep that
+     * precedence here: the script's own declarations would otherwise shadow
+     * an aliased name (an aliased component Foo used in the body of a prefab
+     * that is also called Foo, or in the body of one of its siblings). */
+    bool is_alias = !from && flecs_name_index_find(
+        &ecs_get_world(script->world)->aliases, name, 0, 0) != 0;
+
+    if (v && v->type_visitor && !from && !is_alias &&
         !(lookup_kind & FlecsScriptLookupDynamic))
     {
         int result = flecs_script_type_symbol_lookup(
