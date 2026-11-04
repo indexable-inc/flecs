@@ -11,3 +11,6 @@ docs/examples
 MODULE.bazel.lock
 .*
 .*/*
+# flecs-distr (distr/Cargo.toml) build output
+/distr/target
+/distr/Cargo.lock

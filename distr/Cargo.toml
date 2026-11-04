@@ -1,0 +1,10 @@
+[package]
+name = "flecs-distr"
+description = "Where this fork's amalgamated flecs (distr/flecs.c, distr/flecs.h) is, for a build script that compiles it with its own defines. Builds nothing itself."
+version = "4.2.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/indexable-inc/flecs"
+
+[lib]
+path = "lib.rs"
