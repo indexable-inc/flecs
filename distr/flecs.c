@@ -95705,7 +95705,15 @@ int flecs_script_symbol_lookup(
         return -1;
     }
 
-    if (v && v->type_visitor && !from &&
+    /* A world alias is looked up before anything else by
+     * ecs_lookup_path_w_sep, so it wins from inside any scope. Keep that
+     * precedence here: the script's own declarations would otherwise shadow
+     * an aliased name (an aliased component Foo used in the body of a prefab
+     * that is also called Foo, or in the body of one of its siblings). */
+    bool is_alias = !from && flecs_name_index_find(
+        &ecs_get_world(script->world)->aliases, name, 0, 0) != 0;
+
+    if (v && v->type_visitor && !from && !is_alias &&
         !(lookup_kind & FlecsScriptLookupDynamic))
     {
         int result = flecs_script_type_symbol_lookup(
@@ -95934,6 +95942,18 @@ ecs_entity_t flecs_script_new_entity(
     } else {
         desc.parent = parent;
         desc.name = name;
+
+        /* A declaration inside a scope names a child of that scope. Resolve
+         * it as one: ecs_entity_init looks the name up with
+         * ecs_lookup_path_w_sep, which returns a world alias of that name
+         * first, so `ui { prefab Node { } }` would reopen an aliased root
+         * entity Node instead of creating ui.Node. */
+        if (parent && name && !strchr(name, '.')) {
+            desc.id = ecs_lookup_child(v->world, parent, name);
+            if (!desc.id) {
+                desc.id = ecs_new(v->world);
+            }
+        }
     }
 
     ecs_entity_t result = ecs_entity_init(v->world, &desc);

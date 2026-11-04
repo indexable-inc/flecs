@@ -463,6 +463,18 @@ ecs_entity_t flecs_script_new_entity(
     } else {
         desc.parent = parent;
         desc.name = name;
+
+        /* A declaration inside a scope names a child of that scope. Resolve
+         * it as one: ecs_entity_init looks the name up with
+         * ecs_lookup_path_w_sep, which returns a world alias of that name
+         * first, so `ui { prefab Node { } }` would reopen an aliased root
+         * entity Node instead of creating ui.Node. */
+        if (parent && name && !strchr(name, '.')) {
+            desc.id = ecs_lookup_child(v->world, parent, name);
+            if (!desc.id) {
+                desc.id = ecs_new(v->world);
+            }
+        }
     }
 
     ecs_entity_t result = ecs_entity_init(v->world, &desc);
