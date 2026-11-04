@@ -1414,6 +1414,9 @@ void ecs_add_id(
     ecs_check(world != NULL, ECS_INVALID_PARAMETER, NULL);
     flecs_assert_entity_valid(world, entity, "add");
     flecs_assert_component_valid(world, entity, component, "add");
+    if (!flecs_pair_constraints_ok(world, component)) {
+        return; /* refused and logged (FLECS_SOFT_ASSERT) */
+    }
     flecs_add_id(world, entity, component);
 error:
     return;
@@ -1988,6 +1991,9 @@ void ecs_set_id(
     ecs_check(world != NULL, ECS_INVALID_PARAMETER, NULL);
     flecs_assert_entity_valid(world, entity, "set");
     flecs_assert_component_valid(world, entity, component, "set");
+    if (!flecs_pair_constraints_ok(world, component)) {
+        return; /* refused and logged (FLECS_SOFT_ASSERT) */
+    }
     ecs_check(size != 0, ECS_INVALID_PARAMETER, NULL);
     ecs_check(ptr != NULL, ECS_INVALID_PARAMETER, 
         "invalid call to set() for component '%s' and entity '%s': no "

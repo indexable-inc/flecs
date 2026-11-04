@@ -41,6 +41,16 @@ int flecs_check_constraint_traits(
 
 #endif
 
+/* With FLECS_SOFT_ASSERT, refuse a pair that breaks a relationship constraint
+ * before it is added. Returns false (after logging the error) when refused. */
+#if defined(FLECS_CONSTRAINT_TRAITS) && defined(FLECS_SOFT_ASSERT)
+bool flecs_pair_constraints_ok(
+    ecs_world_t *world,
+    ecs_id_t id);
+#else
+#define flecs_pair_constraints_ok(world, id) ((void)(world), (void)(id), true)
+#endif
+
 #ifdef FLECS_CONSTRAINT_TRAITS
 #define flecs_bootstrap_trait(world, name)\
     flecs_bootstrap_tag(world, name)\

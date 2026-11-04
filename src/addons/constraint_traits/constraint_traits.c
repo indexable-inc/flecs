@@ -256,6 +256,73 @@ error:
 }
 #endif
 
+#ifdef FLECS_SOFT_ASSERT
+/* Upstream checks relationship constraints only in FLECS_DEBUG builds, only
+ * when the pair's component record is made, and only logs: the pair is added
+ * anyway. With FLECS_SOFT_ASSERT the checks run in every build before anything
+ * is added, and a pair that breaks one is refused: the error is logged,
+ * ecs_log_last_error() reports it, and the add/set does nothing. Only the first
+ * use of a pair is checked: a pair that has a component record has passed (or
+ * is already in use). */
+bool flecs_pair_constraints_ok(
+    ecs_world_t *world,
+    ecs_id_t id)
+{
+    if (!ECS_IS_PAIR(id) || flecs_components_get(ecs_get_world(world), id)) {
+        return true;
+    }
+
+    ecs_entity_t rel = ecs_pair_first(world, id);
+    ecs_entity_t tgt = ecs_pair_second(world, id);
+    if (!rel || !tgt || rel == EcsFlag) {
+        return true;
+    }
+
+    if (ecs_has_id(world, tgt, EcsRelationship) && !ecs_id_is_wildcard(rel) &&
+        !ecs_has_id(world, rel, EcsTrait))
+    {
+        ecs_throw(ECS_CONSTRAINT_VIOLATED, "cannot use '%s' as target"
+            " in pair '%s': '%s' has the Relationship trait",
+                flecs_errstr(ecs_get_path(world, tgt)),
+                flecs_errstr_1(ecs_id_str(world, id)),
+                flecs_errstr_2(ecs_get_path(world, tgt)));
+    }
+
+    if (ecs_has_id(world, rel, EcsTarget)) {
+        ecs_throw(ECS_CONSTRAINT_VIOLATED, "cannot use '%s' as relationship "
+            "in pair '%s': '%s' has the Target trait",
+                flecs_errstr(ecs_get_path(world, rel)),
+                flecs_errstr_1(ecs_id_str(world, id)),
+                flecs_errstr_2(ecs_get_path(world, rel)));
+    }
+
+    if (!ecs_id_is_wildcard(tgt)) {
+        ecs_entity_t oneof = flecs_get_oneof(world, rel);
+        if (oneof && !ecs_has_pair(world, tgt, EcsChildOf, oneof)) {
+            ecs_throw(ECS_CONSTRAINT_VIOLATED,
+                "cannot use '%s' as target in pair '%s': relationship '%s' has "
+                "the OneOf trait and '%s' is not a child of '%s'",
+                    flecs_errstr(ecs_get_path(world, tgt)),
+                    flecs_errstr_1(ecs_id_str(world, id)),
+                    flecs_errstr_2(ecs_get_path(world, rel)),
+                    flecs_errstr_3(ecs_get_path(world, tgt)),
+                    flecs_errstr_4(ecs_get_path(world, oneof)));
+        }
+
+        if (rel == EcsIsA && ecs_has_id(world, tgt, EcsFinal)) {
+            ecs_throw(ECS_CONSTRAINT_VIOLATED,
+                "cannot add '(IsA, %s)': '%s' has the Final trait",
+                    flecs_errstr(ecs_get_path(world, tgt)),
+                    flecs_errstr_1(ecs_get_path(world, tgt)));
+        }
+    }
+
+    return true;
+error:
+    return false;
+}
+#endif
+
 void flecs_bootstrap_constraint_traits(
     ecs_world_t *world)
 {

@@ -2910,6 +2910,16 @@ void flecs_register_flag_for_trait(
 #define flecs_bootstrap_constraint_traits(world) (void)world
 #define flecs_check_constraint_traits(world, cr, rel, tgt) (0)
 
+/* With FLECS_SOFT_ASSERT, refuse a pair that breaks a relationship constraint
+ * before it is added. Returns false (after logging the error) when refused. */
+#if defined(FLECS_CONSTRAINT_TRAITS) && defined(FLECS_SOFT_ASSERT)
+bool flecs_pair_constraints_ok(
+    ecs_world_t *world,
+    ecs_id_t id);
+#else
+#define flecs_pair_constraints_ok(world, id) ((void)(world), (void)(id), true)
+#endif
+
 #define flecs_bootstrap_trait(world, name)\
     flecs_bootstrap_tag(world, name)
 
@@ -8108,6 +8118,9 @@ void ecs_add_id(
     ecs_check(world != NULL, ECS_INVALID_PARAMETER, NULL);
     flecs_assert_entity_valid(world, entity, "add");
     flecs_assert_component_valid(world, entity, component, "add");
+    if (!flecs_pair_constraints_ok(world, component)) {
+        return; /* refused and logged (FLECS_SOFT_ASSERT) */
+    }
     flecs_add_id(world, entity, component);
 error:
     return;
@@ -8682,6 +8695,9 @@ void ecs_set_id(
     ecs_check(world != NULL, ECS_INVALID_PARAMETER, NULL);
     flecs_assert_entity_valid(world, entity, "set");
     flecs_assert_component_valid(world, entity, component, "set");
+    if (!flecs_pair_constraints_ok(world, component)) {
+        return; /* refused and logged (FLECS_SOFT_ASSERT) */
+    }
     ecs_check(size != 0, ECS_INVALID_PARAMETER, NULL);
     ecs_check(ptr != NULL, ECS_INVALID_PARAMETER, 
         "invalid call to set() for component '%s' and entity '%s': no "
@@ -29348,6 +29364,11 @@ static void flecs_table_init_flags(
             } else if (r == ecs_id(EcsPoly)) {
                 table->flags |= EcsTableHasModule;
             }
+#if defined(FLECS_DEBUG_INFO) && defined(FLECS_DOC)
+            else if (id == ecs_pair_t(EcsDocDescription, EcsName)) {
+                table->_->doc_name_column = flecs_ito(int16_t, i);
+            }
+#endif
         } else {
             if (ECS_HAS_ID_FLAG(id, TOGGLE)) {
                 ecs_table__t *meta = table->_;
@@ -34148,6 +34169,9 @@ yield:
 static void flecs_query_iter_fini(
     ecs_iter_t *it)
 {
+#if defined(FLECS_CACHED_QUERIES) || defined(FLECS_QUERY_PLANS)
+    ecs_query_iter_t *qit = &it->priv_.iter.query;
+#endif
     const ecs_query_t *q = it->query;
     (void)q;
     ecs_assert(q != NULL, ECS_INTERNAL_ERROR, NULL);
@@ -34171,6 +34195,9 @@ ecs_iter_t flecs_query_iter(
 #endif
 
     flecs_poly_assert(q, ecs_query_t);
+#if defined(FLECS_CACHED_QUERIES) || defined(FLECS_QUERY_PLANS)
+    ecs_query_impl_t *impl = flecs_query_impl(q);
+#endif
 
     it.stage = ECS_CONST_CAST(ecs_world_t*, world);
 
