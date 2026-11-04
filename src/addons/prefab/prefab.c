@@ -184,6 +184,14 @@ void flecs_bootstrap_prefab(
     ecs_add_pair(world, EcsOnDelete, EcsOnInstantiate, EcsDontInherit);
     ecs_add_pair(world, EcsExclusive, EcsOnInstantiate, EcsDontInherit);
     ecs_add_pair(world, EcsDontFragment, EcsOnInstantiate, EcsDontInherit);
+
+    /* An instance of a prefab owns OrderedChildren before its children are
+     * instantiated, so the parts of a composite prefab keep the order the
+     * prefab declares them in at every depth. Upstream leaves the tag
+     * inherited: the instance does not own it when its children are
+     * instantiated, and they come out table by table. Set at bootstrap because
+     * the core's observer on OrderedChildren locks its traits afterwards. */
+    ecs_add_pair(world, EcsOrderedChildren, EcsOnInstantiate, EcsCopy);
     ecs_add_pair(world, EcsChildOf, EcsOnInstantiate, EcsDontInherit);
     ecs_add_pair(world, ecs_id(EcsIdentifier), EcsOnInstantiate, EcsDontInherit);
     ecs_add_id(world, ecs_id(EcsTreeSpawner), EcsDontFragment);
